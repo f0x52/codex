@@ -1,0 +1,20 @@
+{% include "parts/header.html" %}
+{% macro display_post(post, op=false) %}
+<div class="post{% if op %} op{% endif %}">
+    <div class="intro">
+        
+    </div>
+    <div class="content">
+        {{ post.Content }}
+    </div>
+</div>
+{% endmacro %}
+        <title>{{ board }} - {{ thread.Name|default:thread.Content }}</title>
+    </head>
+    <body>
+        <h1>{{ site.Name }}</h1>
+        {{ display_post(thread, true) }}
+        {% for post in thread.Posts %}
+            {{ display_post(post)}}
+        {% endfor %}
+{% include "parts/footer.html" %}

@@ -1,0 +1,5 @@
+{
+"name": "Codex Dev Board",
+"boards": {"meta":1},
+"alias": {"q":"meta"}
+}
