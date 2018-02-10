@@ -4,13 +4,15 @@ import (
 	"fmt"
 	"github.com/go-macaron/binding"
 	"github.com/go-macaron/pongo2"
+	"github.com/go-redis/redis"
 	"gopkg.in/macaron.v1"
 	"strconv"
 )
 
 var (
-	site      = loadSiteJSON()
+	storage   *redis.Client
 	authLevel = 1
+	site      Site
 )
 
 func index(ctx *macaron.Context) {
@@ -35,8 +37,9 @@ func thread(ctx *macaron.Context) {
 	ctx.Data["board"] = board
 	ctx.Data["threadId"] = thread
 	if site.Boards[board] != 0 && site.Boards[board] <= authLevel {
-		threadJSON, err := loadThreadJSON(board, thread)
-		ctx.Data["thread"] = threadJSON
+		var threadData Thread
+		err := threadData.Load(board, thread)
+		ctx.Data["thread"] = threadData
 		if err != nil {
 			fmt.Println(err.Error())
 			ctx.Data["error"] = "404"
@@ -50,45 +53,31 @@ func thread(ctx *macaron.Context) {
 	ctx.HTML(404, "error")
 }
 
-func catalog(ctx *macaron.Context) {
-	board := ctx.Params("board")
-	if site.Boards[board] != 0 && site.Boards[board] <= authLevel { //higher authLevels for mod/admin only boards
-		ctx.HTML(200, "catalog")
-		return
-	}
-	ctx.Data["error"] = "404"
-	ctx.HTML(404, "error")
-}
-
 func post(data Submit, ctx *macaron.Context) { //TODO: DO SANITATION!!!!1!
 	fmt.Printf("%+v", data)
 	board := data.Board
 	var thread string
 	if site.Boards[board] != 0 && site.Boards[board] <= authLevel {
-		boardJSON, err := loadBoardJSON(board)
-		if err != nil {
-			fmt.Println(err.Error())
-			ctx.Data["error"] = "That board doesn't exist"
-			ctx.HTML(404, "error")
-			return
-		}
-		boardJSON.Count++
-		saveBoardJSON(boardJSON, board)
-		if !data.NewThread { //Posting to a thread
+		var boardData Board
+		boardData.Load(board)
+		boardData.Count++
+		boardData.Save()
+		if data.NewThread { //Creating a new thread
+			threadData := Thread{Id: boardData.Count, Board: board, Name: data.Name, Content: data.Content}
+			thread = strconv.Itoa(boardData.Count)
+			threadData.Save()
+		} else { //Posting to an existing thread
 			thread = strconv.Itoa(data.Thread)
-			threadJSON, err := loadThreadJSON(board, thread)
+			var threadData Thread
+			err := threadData.Load(board, thread)
 			if err != nil {
 				fmt.Println(err.Error())
 				ctx.Data["error"] = "That thread doesn't exist"
 				ctx.HTML(404, "error")
 				return
 			}
-			threadJSON.Posts = append(threadJSON.Posts, Post{boardJSON.Count, data.Content})
-			saveThreadJSON(threadJSON, board, thread)
-		} else { //Creating a new thread
-			threadJSON := Thread{Id: boardJSON.Count, Name: data.Name, Content: data.Content}
-			thread = strconv.Itoa(boardJSON.Count)
-			saveThreadJSON(threadJSON, board, thread)
+			threadData.Posts = append(threadData.Posts, Post{boardData.Count, data.Content})
+			threadData.Save()
 		}
 		ctx.Redirect("/" + board + "/" + thread)
 	}
@@ -96,6 +85,17 @@ func post(data Submit, ctx *macaron.Context) { //TODO: DO SANITATION!!!!1!
 
 func main() {
 	fmt.Println("Codex 0.01")
+	site.Load()
+	storage = redis.NewClient(&redis.Options{
+		Addr:     site.Redis["address"],
+		Password: "",
+		DB:       0,
+	})
+	if _, err := storage.Ping().Result(); err != nil {
+		fmt.Errorf("Can't ping redis: %s \n", err)
+		return
+	}
+
 	m := macaron.New()
 	m.Use(macaron.Logger())
 	m.Use(macaron.Static("static"))
@@ -106,7 +106,7 @@ func main() {
 
 	m.Get("/", index)
 	m.Get("/:board/", board)
-	m.Get("/:board/catalog", catalog)
+	//m.Get("/:board/catalog", catalog)
 	m.Get("/:board/:thread", thread)
 	m.Post("/post", binding.BindIgnErr(Submit{}), post)
 	m.Run()

@@ -5,82 +5,14 @@ import (
 	"fmt"
 	"io/ioutil"
 	"os"
+	"strconv"
 )
-
-func load(path string) *os.File {
-	fmt.Println("loading: " + path)
-	file, err := os.Open(path)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	return file
-}
-
-func loadSiteJSON() Site {
-	path := "json/site.json"
-	file := load(path)
-	decoder := json.NewDecoder(file)
-	var JSON Site
-	err := decoder.Decode(&JSON)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	return JSON
-}
-
-func loadBoardJSON(board string) (Board, error) {
-	path := fmt.Sprintf("json/boards/%s/%s.json", board, board)
-	file := load(path)
-	decoder := json.NewDecoder(file)
-	var JSON Board
-	err := decoder.Decode(&JSON)
-	if err != nil {
-		fmt.Println(err.Error())
-	}
-	return JSON, err
-}
-
-func saveBoardJSON(boardJSON Board, board string) error {
-	path := fmt.Sprintf("json/boards/%s/%s.json", board, board)
-	fmt.Println("saving json: " + path)
-	jsonString, err := json.Marshal(boardJSON)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(path, jsonString, 0644)
-	return err
-}
-
-func loadThreadJSON(board string, thread string) (Thread, error) {
-	path := fmt.Sprintf("json/boards/%s/%s.json", board, thread)
-	var JSON Thread
-	_, err := os.Stat(path)
-	if err == nil {
-		file := load(path)
-		decoder := json.NewDecoder(file)
-		err = decoder.Decode(&JSON)
-		if err != nil {
-			fmt.Println(err.Error())
-		}
-	}
-	return JSON, err
-}
-
-func saveThreadJSON(threadJSON Thread, board string, thread string) error {
-	path := fmt.Sprintf("json/boards/%s/%s.json", board, thread)
-	fmt.Println("saving json: " + path)
-	jsonString, err := json.Marshal(threadJSON)
-	if err != nil {
-		return err
-	}
-	err = ioutil.WriteFile(path, jsonString, 0644)
-	return err
-}
 
 type Site struct {
 	Name   string            `json:"name"`
 	Boards map[string]int    `json:"boards"`
 	Alias  map[string]string `json:"alias"`
+	Redis  map[string]string `json:"redis"`
 }
 
 type Board struct {
@@ -92,6 +24,7 @@ type Board struct {
 
 type Thread struct {
 	Id      int    `json:"id"`
+	Board   string `json:"board"`
 	Name    string `json:"name"`
 	Content string `json:"content"`
 	Posts   []Post `json:"posts"`
@@ -108,4 +41,57 @@ type Submit struct {
 	Thread    int
 	NewThread bool `binding:"Required"`
 	Name      string
+}
+
+func (site *Site) Load() {
+	_, err := os.Stat("site.json")
+	if err != nil {
+		str := "{\"name\": \"Codex\", \"boards\": {\"meta\": 1}, \"redis\": {\"address\": \"localhost:6379\"}}"
+		ioutil.WriteFile("site.json", []byte(str), 0644)
+		fmt.Println("Edit site details in site.json")
+		os.Exit(1)
+	}
+	file, _ := os.Open("site.json")
+	decoder := json.NewDecoder(file)
+	err = decoder.Decode(&site)
+	if err != nil {
+		fmt.Println(err.Error())
+	}
+}
+
+func (board *Board) Save() {
+	json, err := json.Marshal(board)
+	if err != nil {
+		fmt.Println(err)
+	}
+	if err = storage.Set("board: "+board.Name, json, 0).Err(); err != nil {
+		fmt.Println("Storage error: " + err.Error())
+	}
+}
+
+func (board *Board) Load(name string) {
+	redisData, err := storage.Get("board: " + name).Result()
+	if err != nil {
+		fmt.Println("Loading error: " + err.Error())
+	}
+	json.Unmarshal([]byte(redisData), &board)
+}
+
+func (thread *Thread) Save() {
+	json, err := json.Marshal(thread)
+	if err != nil {
+		fmt.Println(err)
+	}
+	if err = storage.Set("thread: "+thread.Board+"/"+strconv.Itoa(thread.Id), json, 0).Err(); err != nil {
+		fmt.Println("Storage error: " + err.Error())
+	}
+}
+
+func (thread *Thread) Load(board string, id string) error {
+	redisData, err := storage.Get("thread: " + board + "/" + id).Result()
+	if err != nil {
+		return err
+	}
+	json.Unmarshal([]byte(redisData), &thread)
+	return nil
 }
