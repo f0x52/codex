@@ -1,0 +1,8 @@
+<form method="POST" action="/post">
+    <input type="hidden" name="board" value="{{ board }}"/>
+    <input type="hidden" name="thread" value="{{ threadId|default: 0 }}">
+    <input type="hidden" name="new_thread" value="{% if threadId %}false{% else %}true{% endif %}">
+    <input type="input" name="content"/><br>
+    <input type="input" name="name"/><br>
+    <input type="submit">
+</form>

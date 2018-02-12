@@ -7,6 +7,7 @@ import (
 	"github.com/go-redis/redis"
 	"gopkg.in/macaron.v1"
 	"strconv"
+	"time"
 )
 
 var (
@@ -21,9 +22,11 @@ func index(ctx *macaron.Context) {
 
 func board(ctx *macaron.Context) {
 	board := ctx.Params("board")
-	ctx.Data["board"] = board
 	if site.Boards[board] != 0 && site.Boards[board] <= authLevel { //higher authLevels for mod/admin only boards
 		fmt.Println("visit " + board)
+		var boardData Board
+		boardData.Load(board)
+		ctx.Data["board"] = boardData
 		ctx.HTML(200, "board")
 		return
 	}
@@ -39,13 +42,13 @@ func thread(ctx *macaron.Context) {
 	if site.Boards[board] != 0 && site.Boards[board] <= authLevel {
 		var threadData Thread
 		err := threadData.Load(board, thread)
-		ctx.Data["thread"] = threadData
 		if err != nil {
 			fmt.Println(err.Error())
 			ctx.Data["error"] = "404"
 			ctx.HTML(404, "error")
 			return
 		}
+		ctx.Data["thread"] = threadData
 		ctx.HTML(200, "thread")
 		return
 	}
@@ -61,11 +64,11 @@ func post(data Submit, ctx *macaron.Context) { //TODO: DO SANITATION!!!!1!
 		var boardData Board
 		boardData.Load(board)
 		boardData.Count++
-		boardData.Save()
 		if data.NewThread { //Creating a new thread
-			threadData := Thread{Id: boardData.Count, Board: board, Name: data.Name, Content: data.Content}
+			threadData := Thread{Id: boardData.Count, Board: board, Name: data.Name, Content: data.Content, Bump: time.Now()}
 			thread = strconv.Itoa(boardData.Count)
 			threadData.Save()
+			boardData.Threads = append(boardData.Threads, boardData.Count)
 		} else { //Posting to an existing thread
 			thread = strconv.Itoa(data.Thread)
 			var threadData Thread
@@ -76,9 +79,11 @@ func post(data Submit, ctx *macaron.Context) { //TODO: DO SANITATION!!!!1!
 				ctx.HTML(404, "error")
 				return
 			}
-			threadData.Posts = append(threadData.Posts, Post{boardData.Count, data.Content})
+			threadData.Posts = append(threadData.Posts, Post{boardData.Count, data.Content, time.Now()})
+			threadData.Bump = time.Now()
 			threadData.Save()
 		}
+		boardData.Save()
 		ctx.Redirect("/" + board + "/" + thread)
 	}
 }
@@ -109,5 +114,6 @@ func main() {
 	//m.Get("/:board/catalog", catalog)
 	m.Get("/:board/:thread", thread)
 	m.Post("/post", binding.BindIgnErr(Submit{}), post)
+
 	m.Run()
 }

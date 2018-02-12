@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"os"
 	"strconv"
+	"time"
 )
 
 type Site struct {
@@ -16,23 +17,26 @@ type Site struct {
 }
 
 type Board struct {
-	Name  string `json:"name"`
-	Uri   string `json:"uri"`
-	Desc  string `json:"desc"`
-	Count int    `json:"count"`
+	Name    string `json:"name"`
+	Uri     string `json:"uri"`
+	Desc    string `json:"desc"`
+	Count   int    `json:"count"`
+	Threads []int  `json:"threads"`
 }
 
 type Thread struct {
-	Id      int    `json:"id"`
-	Board   string `json:"board"`
-	Name    string `json:"name"`
-	Content string `json:"content"`
-	Posts   []Post `json:"posts"`
+	Id      int       `json:"id"`
+	Board   string    `json:"board"`
+	Name    string    `json:"name"`
+	Content string    `json:"content"`
+	Posts   []Post    `json:"posts"`
+	Bump    time.Time `json:"bump"`
 }
 
 type Post struct {
-	Id      int    `json:"id"`
-	Content string `json:"content"`
+	Id        int       `json:"id"`
+	Content   string    `json:"content"`
+	Timestamp time.Time `json:"time"`
 }
 
 type Submit struct {

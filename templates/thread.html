@@ -1,13 +1,13 @@
 {% include "parts/header.html" %}
 {% macro display_post(post, op=false) %}
-<div class="post{% if op %} op{% endif %}">
-    <div class="intro">
-        
-    </div>
-    <div class="content">
-        {{ post.Content }}
-    </div>
-</div>
+        <div class="post{% if op %} op{% endif %}">
+            <div class="intro">
+                {{ post.Timestamp }}
+            </div>
+            <div class="content">
+                {{ post.Content }}
+            </div>
+        </div>
 {% endmacro %}
         <title>{{ board }} - {{ thread.Name|default:thread.Content }}</title>
     </head>
@@ -17,5 +17,6 @@
         {% for post in thread.Posts %}
             {{ display_post(post)}}
         {% endfor %}
+        {{ thread.Bump|date:"2006-01-02 15:04:05" }}
         {% include "parts/form.html" %}
 {% include "parts/footer.html" %}
